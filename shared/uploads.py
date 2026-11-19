@@ -31,9 +31,13 @@ def parse(raw,filename,mapping,kind):
             if not np.isfinite(df[['H','y','bid','ask','bid_f','ask_f','floor']].to_numpy()).all():raise ValueError('Observation numbers must be finite')
             for c in ['bid','ask','bid_f','ask_f']:
                 if not df[c].between(0,1).all():raise ValueError(c+' must be a probability between 0 and 1')
-            if not df.H.isin([6,3]).all() or not df.y.isin([0,1]).all():raise ValueError('H must be 6 or 3; settled y must be 0 or 1')
+            if not df.H.isin([12,6,3]).all() or not df.y.isin([0,1]).all():raise ValueError('H must be 12, 6 or 3; settled y must be 0 or 1')
             if (df.bid>df.ask).any() or (df.bid_f>df.ask_f).any():raise ValueError('Bid must not exceed ask')
             for c in ['expiry','day']:pd.to_datetime(df[c],utc=True,errors='raise')
+            expiry_day=pd.to_datetime(df.expiry,utc=True,format='mixed').dt.tz_convert('America/New_York').dt.date
+            if not (pd.to_datetime(df.day).dt.date==expiry_day).all():raise ValueError('day must equal the expiry date in New York')
+            if not (df.floor>0).all():raise ValueError('floor must be positive')
+            if df.duplicated((['market'] if 'market' in df else [])+['ticker','H']).any():raise ValueError('Duplicate market/ticker/horizon observation rows')
             if df[OBS_COLS].isna().any().any():raise ValueError('Required observation fields cannot be empty')
             if not df.strike_type.isin(['greater']).all():raise ValueError('The engine accepts normalized greater ladders only')
             if 'market' not in df:df['market']='BTC'
