@@ -82,6 +82,27 @@ def rows(ident:str,offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=5000)):
     return dict(total=len(df),items=records(df.iloc[offset:offset+limit]))
 @router.delete('/{ident}',dependencies=[Depends(require_write)])
 def remove(ident:str):
-    get_metadata(ident)
+    metadata=get_metadata(ident)
+    if metadata.get('active'):storage.delete(f'observations/imports/{ident}.csv')
     storage.delete(f'uploads/{ident}/metadata.json');storage.delete(f'uploads/{ident}/data.csv')
+    if metadata.get('active'):
+        from strategies.kalshi_tail.runs import update_forward
+        update_forward()
     return {'deleted':ident}
+
+@router.post('/{ident}/activate',dependencies=[Depends(require_write)])
+def activate(ident:str):
+    metadata=get_metadata(ident)
+    if metadata['kind']!='observations':raise HTTPException(422,'Only validated observation datasets can be activated as shared history')
+    storage.put(f'observations/imports/{ident}.csv',storage.read(f'uploads/{ident}/data.csv'),'text/csv')
+    metadata['active']=True;storage.save(f'uploads/{ident}/metadata.json',metadata)
+    from strategies.kalshi_tail.runs import update_forward
+    return dict(dataset=metadata,forward=update_forward())
+
+@router.post('/{ident}/deactivate',dependencies=[Depends(require_write)])
+def deactivate(ident:str):
+    metadata=get_metadata(ident)
+    if metadata.get('active'):storage.delete(f'observations/imports/{ident}.csv')
+    metadata['active']=False;storage.save(f'uploads/{ident}/metadata.json',metadata)
+    from strategies.kalshi_tail.runs import update_forward
+    return dict(dataset=metadata,forward=update_forward())
