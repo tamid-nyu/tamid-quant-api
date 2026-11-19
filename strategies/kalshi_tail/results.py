@@ -53,6 +53,6 @@ def dashboard(name='btc'):
     return dict(summary=metrics(dy),daily=records(dy),trades=records(tr),markets=market,correlation=corr,variants=variants,
                 numbered_variants=storage.load('results/numbered-variants.json',[]) if __import__('os').getenv('BLOB_READ_WRITE_TOKEN') else [],
                 calibration=records(frame(BTC/'btc_pm_results_long/btc_reliability_table.csv')),
-                forward=dict(start='2026-11-12',status='awaiting_ingestion',**fwd),
+                forward={'start':'2026-11-12','status':'awaiting_ingestion',**fwd},
                 source_commit=(ROOT/'engine/SOURCE_COMMIT').read_text().strip(),
                 caveats=['Mean daily return is not significantly above zero.', 'One-hour fill slippage can breach the sizing cap.', 'Five-market results use a post-hoc 100-day history gate.'])
