@@ -45,9 +45,12 @@ def ingest(body):
             ref=vals[0] if vals else None
             chosen=multi_pull.select_strikes(settled,ref,cfg['band'],200)
             market_rows=[];hourly=[];missing=[]
+            end_max=int(max(pd.Timestamp(m['close_time']).timestamp() for _,m,_ in chosen)) if chosen else 0
+            batch=kalshi.batch_candles([m['ticker'] for _,m,_ in chosen],end_max-8*3600,end_max+3600)
             for _,m,fl in chosen:
                 expiry=pd.Timestamp(m['close_time']);end=int(expiry.timestamp())
-                d,hist=kalshi.candle_data(series,m['ticker'],end-8*3600,end+3600)
+                d=batch.get(m['ticker']);hist=False
+                if d is None:d,hist=kalshi.candle_data(series,m['ticker'],end-8*3600,end+3600)
                 candles=d.get('candlesticks',[])
                 if not candles:missing.append(m['ticker']);continue
                 market_rows.append(dict(ticker=m['ticker'],expiry=expiry.isoformat(),result=m['result'],floor=fl,strike_rule=cfg['strike_rule']))

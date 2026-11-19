@@ -33,4 +33,4 @@ def load(markets=None,upload_id=None):
         parts.append(normalize(pd.read_csv(io.BytesIO(storage.read(f'uploads/{upload_id}/data.csv')))))
     o=pd.concat(parts,ignore_index=True).drop_duplicates(['market','ticker','H'],keep='last')
     if markets:o=o[o.market.isin(markets)]
-    return o.sort_values(['day','decision_ts','market','ticker']).reset_index(drop=True)
+    return o.reset_index(drop=True)
