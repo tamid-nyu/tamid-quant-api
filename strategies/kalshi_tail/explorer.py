@@ -17,7 +17,8 @@ def ladder(market:str='BTC',day:str|None=None,estimator:str='S'):
         event=multi_pull.event_ticker(series,dt,cfg['event_suffix']);items=kalshi.markets_for_event(event)
         if items:break
     # Never train on the displayed expiry day or later outcomes.
-    obs=load();obs=obs[obs.day<dt]
+    obs=load(['BTC','SPX'] if market in ('BTC','SPX') else None);obs=obs[obs.day<dt]
+    history_by_market=obs.groupby('market').day.nunique().to_dict()
     est=multi_tail.make_estimator(estimator,multi_tail.MultiConfig(estimator=estimator))
     for _,g in obs.groupby('day',sort=True):est.update(tail_strategy.tail_candidates(g))
     history=int(obs[obs.market==market].day.nunique())
@@ -31,6 +32,7 @@ def ladder(market:str='BTC',day:str|None=None,estimator:str='S'):
         reason='Eligible signal'
         if market not in ('BTC','SPX'):reason='Exploratory market; outside frozen market set'
         elif history<150:reason='Fewer than 150 observed expiry days'
+        elif estimator=='P' and any(history_by_market.get(k,0)<150 for k in ('BTC','SPX')):reason='Frozen pooled history incomplete: BTC and SPX each need 150 days'
         elif not 0<=H-h<1:reason='Outside the 6h / 3h decision hour'
         elif not tail:reason='Outside longshot price range'
         elif bid<.01 or ask>.99 or ask-bid>.06+1e-12:reason='Quote fails spread / boundary filter'

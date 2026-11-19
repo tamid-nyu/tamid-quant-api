@@ -29,6 +29,7 @@ class RunRequest(BaseModel):
     def valid(self):
         if self.start and self.end and self.start>self.end:raise ValueError('start must not be after end')
         if self.variant!='base' and (set(self.markets)!={'BTC'} or self.estimator!='S'):raise ValueError('#5 and #7 are BTC-only variants with estimator S')
+        if self.variant!='base' and (self.k!=1 or abs(self.C-self.cap)>1e-12):raise ValueError('#5 and #7 use BTC portfolio sizing: set k=1 and C=cap')
         if len(self.markets)!=len(set(self.markets)):raise ValueError('Market list must be unique')
         return self
 
