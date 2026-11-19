@@ -1,6 +1,6 @@
 # Multi-market tail strategy: first results (2026-11-12)
 
-Spec: `docs/superpowers/specs/2026-11-12-multi-market-tail-design.md`. Bankroll $1,000; per-market cap c = 3%;
+Spec: `strategies/kalshi-tails/docs/specs/2026-11-12-multi-market-tail-design.md`. Bankroll $1,000; per-market cap c = 3%;
 the k = 2 worst markets together capped at C = 4%. Holdout 2026-07-01 → 2026-11-11 is the headline. Sharpe is
 annualized from daily returns, with days without trades counted as 0. "diff" is Sharpe minus BTC-only on the same
 days, with a paired-bootstrap 95% CI.

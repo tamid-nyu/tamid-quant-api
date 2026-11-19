@@ -6,8 +6,8 @@ Each decision round is sized so that no market's worst settlement loses more tha
 `k = 2` worst markets together lose no more than `C = 4%`. Edge comes from estimator **S** (each market learns
 alone) or **P** (each market is shrunk toward the cross-market pooled rate).
 
-Spec: `docs/superpowers/specs/2026-11-12-multi-market-tail-design.md`
-Plan: `docs/superpowers/plans/2026-11-12-multi-market-tail.md`
+Spec: `strategies/kalshi-tails/docs/specs/2026-11-12-multi-market-tail-design.md`
+Plan: `strategies/kalshi-tails/docs/plans/2026-11-12-multi-market-tail.md`
 
 ## Run
 ```
@@ -49,5 +49,8 @@ so nothing below changes without a new, pre-registered spec.
 - Sizing: c = 3%, k = 2, C = 4% of a $1,000 bankroll; `Q_MAX = 50`; `SLIP = 0.02`; `MIN_EDGE = 0.005`
 - Rounds 6h and 3h before each market's expiry; taker fill at the next hour's quote; fee 0.07 × P × (1 − P), rounded up per order
 - Code state: this commit; tests `python -m pytest tests -q` (32 passing)
+
+Predictor v2 (pooled logistic estimator, frozen 2026-11-13, holdout and forward evaluation): see `v2/README.md`.
+Predictor v3 (fixed blend w = 0.5 of v1 P and v2 F1, frozen 2026-11-13, holdout and forward evaluation): see `v3/README.md`.
 
 Results page (charts of both runs): https://claude.ai/artifact/VLG94kNrxNmt4V4JW2JWAi

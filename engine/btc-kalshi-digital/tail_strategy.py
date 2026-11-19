@@ -9,7 +9,7 @@ Edge is estimated walk-forward: for each (horizon, price bin) cell, the realized
 shrunk toward the market price. Reads output/btc_pm_results/btc_observations.csv written by
 btc_digital_model_backtest.py.
 
-Spec: docs/superpowers/specs/2026-11-11-btc-tail-strategy-design.md
+Spec: strategies/kalshi-tails/docs/specs/2026-11-11-btc-tail-strategy-design.md
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,7 +49,7 @@ class Config:
     min_cell_n: int = MIN_CELL_N
     warmup_days: int = WARMUP_DAYS
     fee_rate: float = FEE_RATE
-    # model-variant options (spec: docs/superpowers/specs/2026-11-11-btc-tail-variants-design.md); every default
+    # model-variant options (spec: strategies/kalshi-tails/docs/specs/2026-11-11-btc-tail-variants-design.md); every default
     # reproduces the base strategy
     tail_lo: float = TAIL_LO           # trade only mid < tail_lo or > 1 - tail_lo (the estimator still trains on 10c)
     hours: tuple = HOURS               # decision rounds
