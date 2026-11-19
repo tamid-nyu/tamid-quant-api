@@ -1,1 +1,20 @@
-{"functions":{"api/index.py":{"maxDuration":300,"excludeFiles":"{.venv/**,engine/**/tests/**,engine/**/*.png}"}},"rewrites":[{"source":"/(.*)","destination":"/api/index"}]}
+{
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{.venv/**,engine/**/tests/**,engine/**/*.png}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/ingest/cron",
+      "schedule": "0 23 * * *"
+    }
+  ]
+}
