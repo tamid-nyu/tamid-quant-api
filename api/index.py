@@ -37,3 +37,5 @@ app.include_router(uploads_router)
 app.include_router(explorer_router)
 app.include_router(kalshi_router)
 app.include_router(ingest_router)
+from strategies.kalshi_tail.runs import router as runs_router
+app.include_router(runs_router)

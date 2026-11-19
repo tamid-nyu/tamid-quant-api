@@ -87,3 +87,17 @@ def candles(ticker:str,series_ticker:str,start_ts:int,end_ts:int,period_interval
     d=get(f'/series/{series_ticker}/markets/{ticker}/candlesticks',params,3600)
     if not d or not d.get('candlesticks'):d=get(f'/historical/markets/{ticker}/candlesticks',params,3600)
     return missing(d)
+
+def batch_candles(tickers,start_ts,end_ts):
+    """Up to 100 contracts per documented request; archived data falls back per contract."""
+    out={}
+    for offset in range(0,len(tickers),100):
+        group=tickers[offset:offset+100]
+        try:
+            d=get('/markets/candlesticks',dict(market_tickers=','.join(group),start_ts=start_ts,end_ts=end_ts,period_interval=60),86400) or {}
+            for m in d.get('markets',[]):
+                if m.get('candlesticks'):out[m['market_ticker']]={'candlesticks':m['candlesticks']}
+        except HTTPException:
+            # The single-contract historical endpoint remains the authority for archives.
+            continue
+    return out
