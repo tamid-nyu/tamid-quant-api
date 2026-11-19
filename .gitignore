@@ -1,0 +1,9 @@
+.codex-run.log
+.env*
+.vercel
+node_modules
+
+.venv/
+__pycache__/
+*.pyc
+.remember/
