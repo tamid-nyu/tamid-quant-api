@@ -31,7 +31,9 @@ def dataset(name='btc'):
         dy=frame(BTC/'btc_tail_results_long/tail_daily.csv')
         tr=frame(BTC/'btc_tail_results_long/tail_trades.csv');tr['market']='BTC'
         return dy,tr,None
-    gate,est = name.split(':')
+    parts=name.split(':')
+    if len(parts)!=2:raise ValueError('Unknown dataset')
+    gate,est = parts
     if gate not in ('gate150','gate100_posthoc') or est not in ('S','P'): raise ValueError('Unknown dataset')
     return (frame(MULTI/gate/f'daily_{est}.csv'),frame(MULTI/gate/f'trades_{est}.csv'),frame(MULTI/gate/f'market_daily_{est}.csv'))
 

@@ -1,9 +1,13 @@
 import os
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from strategies.kalshi_tail.results import dashboard,dataset,records
 app=FastAPI(title='TAMID Quant API',version='1.0.0',description='Shared research API. Public reads; authenticated writes. Research simulations, no order execution.')
 app.add_middleware(CORSMiddleware,allow_origins=['https://kalshi-tail-web.vercel.app','http://localhost:3000'],allow_methods=['GET','POST','DELETE'],allow_headers=['Authorization','Content-Type'])
+@app.exception_handler(ValueError)
+async def bad_value(request:Request,exc:ValueError):
+    return JSONResponse(status_code=422,content={'detail':str(exc)})
 @app.get('/health')
 def health(): return {'status':'ok','service':'tamid-quant-api'}
 @app.get('/strategies/kalshi-tail/results')
@@ -27,7 +31,10 @@ def forward():return dashboard()['forward']
 async def api_prefix(request,call_next):
     p=request.scope['path']
     if p.startswith('/api/'):request.scope['path']=p[4:]
-    return await call_next(request)
+    response=await call_next(request)
+    response.headers['Cache-Control']='no-store'
+    response.headers['X-Content-Type-Options']='nosniff'
+    return response
 
 from shared.uploads import router as uploads_router
 from shared.kalshi import router as kalshi_router
@@ -39,3 +46,5 @@ app.include_router(kalshi_router)
 app.include_router(ingest_router)
 from strategies.kalshi_tail.runs import router as runs_router
 app.include_router(runs_router)
+from shared.catalog import router as catalog_router
+app.include_router(catalog_router)
