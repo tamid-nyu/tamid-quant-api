@@ -7,7 +7,7 @@ strikes nearest the money and downloads hourly bid/ask candles for the 14 hours 
 the previous expiry's settlement value (expiration_value), which is known before any decision for the new day, so the
 contract selection does not look ahead. No spot data is needed: outcomes come from Kalshi's `result` field.
 
-Spec: docs/superpowers/specs/2026-11-12-multi-market-tail-design.md (section 3)
+Spec: strategies/kalshi-tails/docs/specs/2026-11-12-multi-market-tail-design.md (section 3)
 
 Outputs (output/raw/<KEY>/): markets.csv, hourly.csv, run_log.txt. Candles are cached per ticker in output/raw/cache/,
 so an interrupted run resumes where it stopped.

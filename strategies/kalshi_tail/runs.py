@@ -10,6 +10,10 @@ from shared import storage
 from shared.auth import require_write
 from strategies.kalshi_tail.observations import load,multi_tail,tail_strategy
 from strategies.kalshi_tail.results import metrics,records
+from v2.logit_v2 import FROZEN as V2_FROZEN
+BLINDED=('V2','V3')
+HOLDOUT_END=date.fromisoformat(multi_tail.HOLDOUT[1])
+def forward_open():return date.today()>=multi_tail.FORWARD_OPEN
 router=APIRouter(prefix='/strategies/kalshi-tail',tags=['Backtests'])
 class RunRequest(BaseModel):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
@@ -19,7 +23,7 @@ class RunRequest(BaseModel):
     C:float=Field(.03,gt=0,le=.5,description='k-worst cap as a bankroll fraction')
     slip:float=Field(.02,ge=0,le=.2)
     q_max:int=Field(50,ge=1,le=1000)
-    estimator:Literal['S','P']='S'
+    estimator:Literal['S','P','V2','V3']=Field('S',description='S, P (v1); V2 = predictor v2 F1; V3 = v2/P blend, frozen w. V2/V3 see no forward days before 2027-05-12')
     start:date|None=None
     end:date|None=None
     variant:Literal['base','#5','#7']='base'
@@ -36,13 +40,19 @@ class RunRequest(BaseModel):
 def execute(body,obs=None):
     obs=load(body.markets,body.upload_id) if obs is None else obs
     if body.end:obs=obs[obs.day<=body.end]
+    held_back=0
+    if body.estimator in BLINDED:
+        # v2/v3 specs section 7: forward expiry days are not looked at before the pre-registered look date.
+        if body.start and body.start>HOLDOUT_END and not forward_open():
+            raise HTTPException(422,f'{body.estimator} forward results are blinded until {multi_tail.FORWARD_OPEN} (pre-registered look date). Use a window ending by {HOLDOUT_END}.')
+        obs,held_back=multi_tail.hold_back_forward(obs)
     counts={str(k):int(v) for k,v in obs.groupby('market').day.nunique().items()}
     missing=[k for k in body.markets if counts.get(k,0)<body.min_history_days]
     if missing:raise HTTPException(422,dict(message='Insufficient stored observation history. Upload observations or ingest more expiry days.',required_days=body.min_history_days,available=counts,markets=missing))
     # Hash the exact ordered input including model-prior columns, so every run identifies its evidence.
     input_hash=hashlib.sha256(obs.to_csv(index=False).encode()).hexdigest()
     if body.variant=='base':
-        cfg=multi_tail.MultiConfig(cap_m=body.cap,k=body.k,cap_k=body.C,slip=body.slip,q_max=body.q_max,estimator=body.estimator)
+        cfg=multi_tail.MultiConfig(cap_m=body.cap,k=body.k,cap_k=body.C,slip=body.slip,q_max=body.q_max,estimator=body.estimator,v2_set=V2_FROZEN['set'])
         tr,dy,md=multi_tail.run(obs,cfg)
         engine='multi_tail.run'
     else:
@@ -57,7 +67,7 @@ def execute(body,obs=None):
     if dy.empty:raise HTTPException(422,'No observed expiry days in the selected result window')
     dy=dy.copy();dy['equity']=1000+dy.pnl.cumsum();dy['drawdown']=(dy.equity-1000-(dy.equity-1000).clip(lower=0).cummax())/10
     return dict(summary=metrics(dy),trades=records(tr),daily=records(dy),market_daily=records(md),engine=engine,
-                input_sha256=input_hash,history_days=counts,observations=len(obs),
+                input_sha256=input_hash,history_days=counts,observations=len(obs),forward_rows_held_back=held_back,
                 source_commit=(__import__('pathlib').Path(__file__).resolve().parents[2]/'engine/SOURCE_COMMIT').read_text().strip(),
                 warning='Exploratory configuration' if body.min_history_days<150 or body.variant!='base' or set(body.markets)-{'BTC','SPX'} else None)
 
@@ -117,10 +127,11 @@ def update_forward():
     after=obs[obs.day>=date(2026,11,12)]
     result=dict(start='2026-11-12',updated=datetime.now(timezone.utc).isoformat(),status='current' if set(eligible)=={'BTC','SPX'} else 'incomplete_history',
                 available_history={k:int(v) for k,v in counts.items()},eligible_markets=eligible,missing_frozen_markets=[k for k in ('BTC','SPX') if k not in eligible],
-                observed_days=sorted(str(x) for x in after.day.unique()),note='Training uses earlier expiry days only. Missing expiry days are not counted as zero-return days.')
+                observed_days=sorted(str(x) for x in after.day.unique()),
+                blinded_estimators=[] if forward_open() else list(BLINDED),forward_open=str(multi_tail.FORWARD_OPEN),note='Training uses earlier expiry days only. Missing expiry days are not counted as zero-return days.')
     if eligible and len(after):
         by_est={}
-        for est in ('S','P'):
+        for est in ('S','P')+(BLINDED if forward_open() else ()):
             body=RunRequest(markets=eligible,k=2,C=.04,estimator=est,start=date(2026,11,12))
             by_est[est]=execute(body,obs[obs.market.isin(eligible)])
         result['summary']=by_est['S']['summary'];result['estimators']={k:v['summary'] for k,v in by_est.items()}

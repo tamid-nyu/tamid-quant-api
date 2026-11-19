@@ -6,7 +6,7 @@ Each model changes exactly one thing from Model 0, the base tail strategy. A mod
 period (Jan - Jun 2026) by annualized Sharpe ratio, frozen, then scored once on the holdout (Jul 1 - Nov 11 2026).
 Every run walks forward over the whole history; the periods only decide which days are scored.
 
-Spec: docs/superpowers/specs/2026-11-11-btc-tail-variants-design.md
+Spec: strategies/kalshi-tails/docs/specs/2026-11-11-btc-tail-variants-design.md
 """
 import dataclasses
 import datetime as dt

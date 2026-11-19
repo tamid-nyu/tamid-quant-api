@@ -58,4 +58,12 @@ def make_estimator(kind, cfg):
         return SeparateEstimator(cfg.n0)
     if kind == "P":
         return PooledEstimator(cfg.n0, cfg.n1)
-    raise ValueError(f"estimator must be S or P, got {kind!r}")
+    if kind == "V2":
+        from v2.logit_v2 import LogitV2Estimator
+        return LogitV2Estimator(cfg.v2_set)
+    if kind == "V3":
+        from v3 import blend
+        if blend.FROZEN["w"] is None:
+            raise ValueError("v3 not frozen")
+        return blend.BlendEstimator(blend.FROZEN["w"], cfg.n0, cfg.n1)
+    raise ValueError(f"estimator must be S, P, V2 or V3, got {kind!r}")

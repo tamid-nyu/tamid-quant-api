@@ -7,8 +7,9 @@ Each decision round is sized so that no market's worst settlement loses more tha
 markets together lose no more than cap_k (multi_sizer.py). Edge comes from estimator S (each market alone) or
 P (each market shrunk toward the cross-market pooled rate), walk-forward on prior expiry days only.
 
-Spec: docs/superpowers/specs/2026-11-12-multi-market-tail-design.md
+Spec: strategies/kalshi-tails/docs/specs/2026-11-12-multi-market-tail-design.md
 """
+import datetime as dt
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,8 +26,12 @@ from estimators import make_estimator  # noqa: E402
 from multi_sizer import book_losses, size_multi, topk_sum  # noqa: E402
 
 OUT_DIR = HERE / "output"
+V2_FEATURES = HERE / "v2" / "output" / "features" / "features.csv"
+V2_OUT_DIR = HERE / "v2" / "output" / "sim"
+V3_OUT_DIR = HERE / "v3" / "output" / "sim"
 CHECK = ("2026-01-01", "2026-06-30")
 HOLDOUT = ("2026-07-01", "2026-11-11")
+FORWARD_OPEN = dt.date(2027, 5, 12)   # spec section 7: forward expiry days are not looked at before this date
 TRADE_COLS = ts.TRADE_COLS + ["market", "group"]
 DAILY_COLS = ["day", "pnl", "ret", "n_trades", "n_wins", "n_markets", "deployed",
               "assumed_max_market", "assumed_topk", "assumed_all",
@@ -49,7 +54,9 @@ class MultiConfig:
     warmup_days: int = ts.WARMUP_DAYS
     fee_rate: float = ts.FEE_RATE
     estimator: str = "S"
+    v2_set: str = "F1"             # feature set for estimator "V2"; must equal v2.logit_v2.FROZEN["set"] (tested)
     hours: tuple = ts.HOURS
+    trade_markets: tuple = None    # None: every market trades; else the rest only feed the estimator (learn-only)
     total_cap: float = None        # option-1 baseline: every market's worst case summed against this one cap
 
     @property
@@ -63,9 +70,10 @@ class MultiConfig:
 
 def _candidates(rows, est, cfg, day):
     out = []
+    min_n = getattr(est, "min_rows", cfg.min_cell_n)
     for r in rows.itertuples(index=False):
-        f, n = est.estimate(r.market, r.H, r.mid)
-        if n < cfg.min_cell_n or not np.isfinite(f):
+        f, n = est.estimate_row(r) if hasattr(est, "estimate_row") else est.estimate(r.market, r.H, r.mid)
+        if n < min_n or not np.isfinite(f):
             continue
         side, price, edge = ts.best_side(r.bid, r.ask, f, cfg)
         fill = r.ask_f if side == 1 else r.bid_f
@@ -88,6 +96,8 @@ def run(obs, cfg):
         g = g[g.H.isin(ts.HOURS)]
         tails = ts.tail_candidates(g)
         live = tails[tails.H.isin(cfg.hours) & tails.market.map(lambda m: days_seen.get(m, 0) >= cfg.warmup_days)]
+        if cfg.trade_markets is not None:
+            live = live[live.market.isin(cfg.trade_markets)]
         held = {}
         assumed = {}
         for t_dec in sorted(live.decision_ts.unique()):
@@ -273,12 +283,45 @@ def enabled_markets(min_days=None):
     return keys
 
 
+def load_features(keys, path=V2_FEATURES):
+    """v1 observations plus v2 feature columns (v2/features.py), typed as multi_obs.load_all types them."""
+    if not Path(path).exists():
+        raise FileNotFoundError(f"{path} missing: run python -m v2.features first")
+    o = pd.read_csv(path)
+    o = o[o.market.isin(keys)].reset_index(drop=True)
+    missing = sorted(set(keys) - set(o.market))
+    if missing:
+        raise SystemExit(f"{path} has no rows for {', '.join(missing)}")
+    o["expiry"] = pd.to_datetime(o.expiry, utc=True)
+    o["decision_ts"] = pd.to_datetime(o.decision_ts, utc=True)
+    o["day"] = pd.to_datetime(o.day).dt.date
+    return o
+
+
+def _real_today():
+    return dt.date.today()
+
+
+def hold_back_forward(obs, today=None):
+    """Drop rows with day after the holdout end unless today >= FORWARD_OPEN (spec section 7). Returns (obs, n_held)."""
+    today = today or _real_today()
+    if today >= FORWARD_OPEN:
+        return obs, 0
+    keep = obs.day <= dt.date.fromisoformat(HOLDOUT[1])
+    n = int((~keep).sum())
+    if n:
+        print(f"held back {n} observation rows after {HOLDOUT[1]} (forward period, not looked at before {FORWARD_OPEN})")
+    return obs[keep].reset_index(drop=True), n
+
+
 def main(argv=None):
     import argparse
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     ap.add_argument("--markets", nargs="*", default=None, help="market keys (default: enabled markets passing the gate)")
-    ap.add_argument("--estimator", choices=["S", "P"], default="S")
+    ap.add_argument("--estimator", choices=["S", "P", "V2", "V3"], default="S",
+                    help="V2 (v2/logit_v2.py) and V3 (v3/blend.py, frozen w) read observations with features from "
+                         "v2/output/features/features.csv")
     ap.add_argument("--bankroll", type=float, default=1000.0)
     ap.add_argument("--cap", type=float, default=0.03, help="per-market worst-case cap c, fraction of bankroll")
     ap.add_argument("--k", type=int, default=2)
@@ -292,17 +335,25 @@ def main(argv=None):
     ap.add_argument("--min-history-days", type=int, default=None,
                     help="drop markets with fewer expiry days (default 150, spec section 2)")
     ap.add_argument("--all", action="store_true", help="S, P, BTC-only, option-1 baseline and k sensitivity")
-    ap.add_argument("--out-dir", default=str(OUT_DIR))
+    ap.add_argument("--out-dir", default=None, help=f"default {OUT_DIR} ({V2_OUT_DIR} for V2, {V3_OUT_DIR} for V3)")
     ap.add_argument("--no-plot", action="store_true")
     a = ap.parse_args(argv)
     check_args(a.k, a.cap, a.cap_k)
+    if a.all and a.estimator in ("V2", "V3"):
+        raise SystemExit(f"--all runs the v1 estimators only; run --estimator {a.estimator} without --all")
 
     from multi_obs import load_all
     keys = a.markets or enabled_markets(a.min_history_days)
-    obs = load_all(keys)
-    out = Path(a.out_dir)
+    obs = load_features(keys) if a.estimator in ("V2", "V3") else load_all(keys)
+    obs, _ = hold_back_forward(obs)
+    out = Path(a.out_dir or {"V2": V2_OUT_DIR, "V3": V3_OUT_DIR}.get(a.estimator, OUT_DIR))
     out.mkdir(parents=True, exist_ok=True)
-    base = dict(bankroll=a.bankroll, cap_m=a.cap, k=a.k, cap_k=a.cap_k, q_max=a.q_max, min_edge=a.min_edge,
+    if a.estimator == "V2":
+        from v2.logit_v2 import FROZEN
+        extra = dict(v2_set=FROZEN["set"])
+    else:
+        extra = {}
+    base = dict(extra, bankroll=a.bankroll, cap_m=a.cap, k=a.k, cap_k=a.cap_k, q_max=a.q_max, min_edge=a.min_edge,
                 slip=a.slip, n0=a.n0, n1=a.n1, warmup_days=a.warmup_days)
     btc = obs[obs.market == "BTC"]
     runs = {}

@@ -22,7 +22,7 @@ Trades only tail contracts (mid < 10% or > 90%) 6h and 3h before expiry, where t
 Edge is a walk-forward estimate per (horizon, price bin) from prior expiry days, shrunk toward the market price.
 Each expiry day's book is sized with a linear program so that the worst BTC settlement loses at most 3% of bankroll
 (`tail_sizer.py`), and it is compared against one-contract and per-trade-cap baselines.
-Spec: `docs/superpowers/specs/2026-11-11-btc-tail-strategy-design.md`.
+Spec: `strategies/kalshi-tails/docs/specs/2026-11-11-btc-tail-strategy-design.md`.
 
 ```
 python btc_digital_model_backtest.py     # writes output/btc_pm_results/btc_observations.csv (input)

@@ -6,7 +6,7 @@ decision_ts = floor_to_hour(expiry - H). bid/ask are the hourly candle close quo
 later (the fill). Rows with a missing quote at either hour are dropped. day = expiry date in New York time.
 BTC rows come from the BTC backtest's long-history observations, unchanged.
 
-Spec: docs/superpowers/specs/2026-11-12-multi-market-tail-design.md (section 3)
+Spec: strategies/kalshi-tails/docs/specs/2026-11-12-multi-market-tail-design.md (section 3)
 Run:  python multi_obs.py     (writes output/obs/<KEY>.csv and prints the history gate)
 """
 import sys
