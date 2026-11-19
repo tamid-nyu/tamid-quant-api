@@ -28,3 +28,12 @@ async def api_prefix(request,call_next):
     p=request.scope['path']
     if p.startswith('/api/'):request.scope['path']=p[4:]
     return await call_next(request)
+
+from shared.uploads import router as uploads_router
+from shared.kalshi import router as kalshi_router
+from shared.ingest import router as ingest_router
+from strategies.kalshi_tail.explorer import router as explorer_router
+app.include_router(uploads_router)
+app.include_router(explorer_router)
+app.include_router(kalshi_router)
+app.include_router(ingest_router)
